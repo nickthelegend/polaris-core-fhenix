@@ -132,28 +132,28 @@ export function usePolaris() {
     const getLPBalanceHandle = useCallback(async (tokenAddress: string) => {
         if (!address) return ethers.ZeroHash;
         const { config, id } = getMasterConfig();
-        const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
+        const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id, false);
         return await poolManager.getLpShares(address, tokenAddress);
     }, [address, getMasterConfig, getContract]);
 
     const getUserTotalCollateralHandle = useCallback(async () => {
         if (!address) return ethers.ZeroHash;
         const { config, id } = getMasterConfig();
-        const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
+        const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id, false);
         return await poolManager.getUserTotalCollateral(address);
     }, [address, getMasterConfig, getContract]);
 
     const getScoreHandle = useCallback(async () => {
         if (!address) return ethers.ZeroHash;
         const { config, id } = getMasterConfig();
-        const scoreManager = await getContract(config.SCORE_MANAGER, ABIS.ScoreManager, id);
+        const scoreManager = await getContract(config.SCORE_MANAGER, ABIS.ScoreManager, id, false);
         return await scoreManager.getScore(address);
     }, [address, getMasterConfig, getContract]);
 
     const getCreditLimitHandle = useCallback(async () => {
         if (!address) return ethers.ZeroHash;
         const { config, id } = getMasterConfig();
-        const scoreManager = await getContract(config.SCORE_MANAGER, ABIS.ScoreManager, id);
+        const scoreManager = await getContract(config.SCORE_MANAGER, ABIS.ScoreManager, id, false);
         return await scoreManager.getCreditLimit(address);
     }, [address, getMasterConfig, getContract]);
 

@@ -206,8 +206,7 @@ export default function Page() {
         try {
             toast.info("Requesting secure decryption via EIP-712...")
             // Default to USDC for home page overview
-            const { TOKENS } = await import("@/config/tokens")
-            const tokenAddr = TOKENS["USDC"]?.address || ""
+            const tokenAddr = CONTRACTS.MASTER.USDC || ""
             await decryptAllPositions(tokenAddr)
             setHasDecrypted(true)
             toast.success("Confidential positions revealed")

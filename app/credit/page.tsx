@@ -17,7 +17,7 @@ const PAGE_SIZE = 10
 interface Loan { id: number; principal: string; interest: string; totalDebt: string; repaid: string; startTime: number; status: number; poolToken: string }
 
 export default function CreditPage() {
-  const { isConnected, address } = useAccount()
+  const { isConnected, address, chain } = useAccount()
   const { authenticated, getUserTotalCollateralHandle, getLoans, getCreditLimitHandle, getExternalNetValue } = usePolaris()
   const [collateral, setCollateral] = useState("0")
   const [externalValue, setExternalValue] = useState("0")
@@ -32,9 +32,9 @@ export default function CreditPage() {
   const [loanPage, setLoanPage] = useState(0)
   const [splitPage, setSplitPage] = useState(0)
   const [repayPage, setRepayPage] = useState(0)
-
+ 
   const ps = usePrivateScore()
-
+ 
   const fetchAll = async () => {
     try {
       const [colHandle, ln, limitHandle] = await Promise.all([getUserTotalCollateralHandle(), getLoans(), getCreditLimitHandle()])
@@ -51,8 +51,8 @@ export default function CreditPage() {
       }
     } catch {}
   }
-
-  useEffect(() => { if (!authenticated) { setLoading(false); return }; fetchAll().finally(()=>setLoading(false)) }, [authenticated, address])
+ 
+  useEffect(() => { if (!authenticated) { setLoading(false); return }; fetchAll().finally(()=>setLoading(false)) }, [authenticated, address, chain?.id])
   const handleRefresh = async () => { setRefreshing(true); await fetchAll(); setRefreshing(false) }
 
   if (!authenticated || !isConnected) return (

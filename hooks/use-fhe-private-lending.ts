@@ -41,28 +41,58 @@ export function useFhePrivateLending() {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
       const { config, id } = getMasterConfig();
-      const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
-      const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id);
-      const scoreManager = await getContract(config.SCORE_MANAGER, ABIS.ScoreManager, id);
+      const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id, false);
+      const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id, false);
 
-      const [sHandle, dHandle, cHandle, scoreHandle, limitHandle] = await Promise.all([
+      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_NETWORK_URL || "https://ethereum-sepolia-rpc.publicnode.com");
+      const scoreManager = new ethers.Contract(config.SCORE_MANAGER, [
+        "function getScore(address) view returns (bytes32)",
+        "function getCreditLimit(address) view returns (bytes32)",
+        "function getEncryptedScore(address) view returns (bytes32)",
+        "function getEncryptedLimit(address) view returns (bytes32)"
+      ], provider);
+
+      let scoreHandle;
+      let limitHandle;
+      try {
+        scoreHandle = await scoreManager.getScore(address);
+        limitHandle = await scoreManager.getCreditLimit(address);
+      } catch {
+        scoreHandle = await scoreManager.getEncryptedScore(address);
+        limitHandle = await scoreManager.getEncryptedLimit(address);
+      }
+
+      const [sHandle, dHandle, cHandle] = await Promise.all([
         poolManager.getLpShares(address, tokenAddress),
         loanEngine.getUserActiveDebt(address),
-        poolManager.getUserTotalCollateral(address),
-        scoreManager.getScore(address),
-        scoreManager.getCreditLimit(address)
+        poolManager.getUserTotalCollateral(address)
       ]);
 
       const signer = await getSigner();
       const client = await getCoFHEClient(signer);
 
-      const decryptSingle = async (handle: string, fheType: any) => {
-        if (!handle || handle === '0x' + '0'.repeat(64)) return 0n;
+      const parseHandle = (h: any): bigint => {
+        if (!h) return 0n;
+        if (typeof h === 'bigint') return h;
+        if (typeof h === 'object') {
+          if (h.data !== undefined) return parseHandle(h.data);
+          if (h[0] !== undefined) return parseHandle(h[0]);
+        }
         try {
-          const val = await decryptView(client, BigInt(handle), fheType);
+          return BigInt(h);
+        } catch {
+          return 0n;
+        }
+      };
+
+      const decryptSingle = async (handle: any, fheType: any) => {
+        const handleVal = parseHandle(handle);
+        if (handleVal === 0n) return 0n;
+        try {
+          const val = await decryptView(client, handleVal, fheType);
           return BigInt(val);
         } catch (e) {
-          console.error(`Failed to decrypt handle ${handle}:`, e);
+          console.error(`Failed to decrypt handle ${handleVal}:`, e);
           return 0n;
         }
       };

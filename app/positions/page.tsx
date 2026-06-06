@@ -12,6 +12,7 @@ import { useFhePrivateLending } from "@/hooks/use-fhe-private-lending"
 import { parseUnits } from "viem"
 import { toast } from "sonner"
 import { syncTransaction, syncPosition } from "@/lib/sync-utils"
+import { getTokenAddress } from "@/config/tokens"
 
 type LogEntry = { ts: number; msg: string; type: "info" | "ok" | "err" | "wait" }
 
@@ -25,6 +26,8 @@ function ManageModal({ pos, onClose }: { pos: Position; onClose: () => void }) {
   const { supply, borrow, repay, requestWithdrawal, finalizeWithdrawal, loading, decryptAllPositions, suppliedBalance, collateralBalance, debtBalance } = useFhePrivateLending()
   const [decryptingBal, setDecryptingBal] = useState(false)
 
+  const tokenAddr = getTokenAddress(pos.symbol, 11155111) || ""
+
   const currentBalance = isSupply
     ? (suppliedBalance !== null ? suppliedBalance : collateralBalance)
     : debtBalance
@@ -32,8 +35,6 @@ function ManageModal({ pos, onClose }: { pos: Position; onClose: () => void }) {
   const handleDecryptBalance = async () => {
     setDecryptingBal(true)
     try {
-      const { TOKENS } = await import("@/config/tokens")
-      const tokenAddr = TOKENS[pos.symbol]?.address || ""
       await decryptAllPositions(tokenAddr)
     } catch {}
     setDecryptingBal(false)

@@ -132,8 +132,7 @@ export function LendingActionModal({
       const fn = isSupply ? "supply" : isWithdraw ? "withdraw" : "borrow"
       addLog({ id: 3, step: "On-Chain Call", detail: `Executing ${fn}() on Hub Hub...`, status: "pending" })
       
-      const { TOKENS } = await import("@/config/tokens")
-      const tokenAddr = TOKENS[pool.symbol]?.address || ""
+      const tokenAddr = getTokenAddress(pool.symbol, networkId) || ""
       
       let hash;
       if (isSupply) {

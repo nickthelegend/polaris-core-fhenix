@@ -37,37 +37,110 @@ export function usePrivateScore() {
     if (!address) return false;
     try {
       const { id } = getMasterConfig();
-      const c = await getContract(getAddr(), ABIS.ScoreManager, id, false);
-      const scoreHandle = await c.getScore(address);
-      const init = scoreHandle && scoreHandle !== '0x' + '0'.repeat(64);
-      setState(s => ({ ...s, isInitialized: init }));
+      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_NETWORK_URL || "https://ethereum-sepolia-rpc.publicnode.com");
+      const c = new ethers.Contract(getAddr(), [
+        "function getScore(address) view returns (bytes32)",
+        "function getEncryptedScore(address) view returns (bytes32)",
+        "function isInitialized(address) view returns (bool)",
+        "function hasScore(address) view returns (bool)"
+      ], provider);
+
+      let init = false;
+      try {
+        init = await c.isInitialized(address);
+      } catch {
+        try {
+          init = await c.hasScore(address);
+        } catch {
+          try {
+            const scoreHandle = await c.getScore(address);
+            init = scoreHandle && scoreHandle !== '0x' + '0'.repeat(64);
+          } catch {
+            try {
+              const scoreHandle = await c.getEncryptedScore(address);
+              init = scoreHandle && scoreHandle !== '0x' + '0'.repeat(64);
+            } catch {}
+          }
+        }
+      }
+
+      setState(s => ({ ...s, isInitialized: init, error: null }));
       return init;
-    } catch { return false; }
-  }, [address, getAddr, getMasterConfig, getContract]);
+    } catch (e: any) {
+      setState(s => ({ ...s, isInitialized: false, error: "Failed to connect to ScoreManager. Please ensure you are on the correct network." }));
+      return false;
+    }
+  }, [address, getAddr, getMasterConfig]);
+
+  const initializeScore = useCallback(async () => {
+    if (!address) return;
+    setState(s => ({ ...s, loading: true, error: null }));
+    try {
+      const contractAddr = getAddr();
+      const signer = await getSigner();
+      const contract = new ethers.Contract(contractAddr, [
+        "function initializeScore(address) external",
+        "function isInitialized(address) view returns (bool)"
+      ], signer);
+      
+      const tx = await contract.initializeScore(address);
+      await tx.wait();
+      setState(s => ({ ...s, isInitialized: true, loading: false }));
+    } catch (e: any) {
+      logger.error('PRIVATE_SCORE', 'initializeScore failed', { error: e });
+      setState(s => ({ ...s, loading: false, error: e.message }));
+    }
+  }, [address, getAddr, getSigner]);
 
   const decryptAll = useCallback(async (): Promise<{ score: number | null; limit: number | null }> => {
     if (!address) return { score: null, limit: null };
     setState(s => ({ ...s, decrypting: true, error: null }));
     try {
       const contractAddr = getAddr();
-      const { id } = getMasterConfig();
-      const contract = await getContract(contractAddr, ABIS.ScoreManager, id, false);
-
-      const scoreHandle = await contract.getScore(address);
-      const limitHandle = await contract.getCreditLimit(address);
-
-      const zero = '0x' + '0'.repeat(64);
       
+      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_NETWORK_URL || "https://ethereum-sepolia-rpc.publicnode.com");
+      const contract = new ethers.Contract(contractAddr, [
+        "function getScore(address) view returns (bytes32)",
+        "function getCreditLimit(address) view returns (bytes32)",
+        "function getEncryptedScore(address) view returns (bytes32)",
+        "function getEncryptedLimit(address) view returns (bytes32)"
+      ], provider);
+
+      let scoreHandle;
+      let limitHandle;
+      try {
+        scoreHandle = await contract.getScore(address);
+        limitHandle = await contract.getCreditLimit(address);
+      } catch {
+        scoreHandle = await contract.getEncryptedScore(address);
+        limitHandle = await contract.getEncryptedLimit(address);
+      }
+
       const signer = await getSigner();
       const client = await getCoFHEClient(signer);
 
-      const decryptSingle = async (handle: string, fheType: any) => {
-        if (!handle || handle === zero) return null;
+      const parseHandle = (h: any): bigint => {
+        if (!h) return 0n;
+        if (typeof h === 'bigint') return h;
+        if (typeof h === 'object') {
+          if (h.data !== undefined) return parseHandle(h.data);
+          if (h[0] !== undefined) return parseHandle(h[0]);
+        }
         try {
-          const val = await decryptView(client, BigInt(handle), fheType);
+          return BigInt(h);
+        } catch {
+          return 0n;
+        }
+      };
+
+      const decryptSingle = async (handle: any, fheType: any) => {
+        const handleVal = parseHandle(handle);
+        if (handleVal === 0n) return null;
+        try {
+          const val = await decryptView(client, handleVal, fheType);
           return Number(BigInt(val));
         } catch (e) {
-          console.error(`Failed to decrypt handle ${handle}:`, e);
+          console.error(`Failed to decrypt handle ${handleVal}:`, e);
           return null;
         }
       };
@@ -77,18 +150,19 @@ export function usePrivateScore() {
         decryptSingle(limitHandle, FheTypes.Uint64)
       ]);
 
-      setState(s => ({ ...s, decrypting: false, decryptedScore: score, decryptedLimit: limit }));
+      setState(s => ({ ...s, decrypting: false, decryptedScore: score, decryptedLimit: limit, error: null }));
       return { score, limit };
     } catch (e: any) {
       logger.error('PRIVATE_SCORE', 'decryptAll failed', { error: e });
       setState(s => ({ ...s, decrypting: false, error: e.message }));
       return { score: null, limit: null };
     }
-  }, [address, getAddr, getMasterConfig, getContract, getSigner]);
+  }, [address, getAddr, getSigner]);
 
   return {
     ...state,
     checkInitialized,
+    initializeScore,
     decryptScore: decryptAll,
     decryptAll,
     contractAddress: getAddr(),
