@@ -2,16 +2,17 @@
 
 Polaris Core is the heartbeat of the Polaris Protocol, providing the essential infrastructure for decentralized lending, private swaps, and institutional-grade AMM pools. It serves as the primary application layer for users to interact with the protocol's liquidity and privacy features.
 
-## 🚀 Deployed Contracts (Localhost/Hardhat)
-All contracts are currently deployed on the Hardhat local network (Chain ID: 31337).
+## 🚀 Deployed Contracts (Ethereum Sepolia - Active)
+
+Official smart contract registry deployed on Ethereum Sepolia (Chain ID: 11155111).
 
 ### 🏦 Mock Tokens
 | Token | Address |
 |-------|---------|
-| **WETH** | `0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00` |
-| **BNB**  | `0x36C02dA8a0983159322a80FFE9F24b1acfF8B570` |
-| **USDC** | `0x809d550fca64d94Bd9F66E60752A544199cfAC3D` |
-| **USDT** | `0x4c5859f0F772848b2D91F1D83E2Fe57935348029` |
+| **WETH** | `0xaf4D66F3f9D6325fd08ef6174949376702b76431` |
+| **BNB**  | `0xEB5c6F2094cEDafcC9dBba249f43BacacFb085CA` |
+| **USDC** | `0x209e6F4c016245833DE2999E170eb14F07C29BB1` |
+| **USDT** | `0x010453c439A7a91e372AA256b7B6F65f59E7F44C` |
 
 ### 📈 Lending Pools
 | Token | Address | Collateral Ratio | Interest Rate |
@@ -21,21 +22,25 @@ All contracts are currently deployed on the Hardhat local network (Chain ID: 313
 | **USDC** | `0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575` | 120% | 3% APR |
 | **USDT** | `0xCD8a1C3ba11CF5ECfa6267617243239504a98d90` | 120% | 3% APR |
 
-### 🔐 Private Swap (FHEVM Powered)
-| Token | Address |
+### 🔐 Private Swap & FHEVM Vaults
+| Contract Name | Address |
 |-------|---------|
-| **WETH** | `0x82e01223d51Eb87e16A03E24687EDF0F294da6f1` |
-| **BNB**  | `0x2bdCC0de6bE1f7D2ee689a0342D76F52E8EFABa3` |
-| **USDC** | `0x7969c5eD335650692Bc04293B07F5BF2e7A673C0` |
-| **USDT** | `0x7bc06c482DEAd17c0e297aFbC32f6e63d3846650` |
+| **PrivateCollateralVault** | `0xb189E42714bBc63f1767093292605F52fD29bAb6` |
+| **PrivateBorrowManager** | `0xb581Dbee8300631680f9819d80F28aa1771F6B4C` |
+| **PrivateLendingPool** | `0x1b118B4a941dF9c73047CACE70D685B25ABd8084` |
+| **PrivateLiquidationEngine** | `0x2a3ce934580d924cd8AC145aE9142019150a8Ead` |
+| **PrivateSwapUSDC** | `0x772C9513fFcffaed224048b3e22AcF9E58854b73` |
+| **PrivateSwapUSDT** | `0x066240CB1BEB2e83b74fAF198D9918fC2929b65f` |
+| **PrivateSwapWETH** | `0xa307d16DFea8D265d5D6aE441b5E463Ad6B28e01` |
+| **PrivateSwapBNB** | `0x17761eDa4f670baf6CC3DE099e30f61658a78241` |
 
 ### 🌊 AMM Pools
-| Pair | Address | Initial Liquidity |
-|------|---------|-------------------|
-| **BNB-USDC** | `0xc351628EB244ec633d5f21fBD6621e1a683B1181` | 100 BNB + 30,000 USDC |
-| **BNB-USDT** | `0xFD471836031dc5108809D173A067e8486B9047A3` | 100 BNB + 30,000 USDT |
-| **WETH-USDC** | `0x51A1ceB83B83F1985a81C295d1fF28Afef186E02` | 50 WETH + 100,000 USDC |
-| **WETH-USDT** | `0x36b58F5C1969B7b6591D752ea6F5486D069010AB` | 50 WETH + 100,000 USDT |
+| Pair | Address |
+|------|---------|
+| **BNB-USDC** | `0xc351628EB244ec633d5f21fBD6621e1a683B1181` |
+| **BNB-USDT** | `0xFD471836031dc5108809D173A067e8486B9047A3` |
+| **WETH-USDC** | `0x51A1ceB83B83F1985a81C295d1fF28Afef186E02` |
+| **WETH-USDT** | `0x36b58F5C1969B7b6591D752ea6F5486D069010AB` |
 
 ---
 
