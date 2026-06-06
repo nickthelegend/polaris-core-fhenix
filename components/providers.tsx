@@ -16,7 +16,7 @@ const wagmiConfig = getDefaultConfig({
   projectId: "YOUR_PROJECT_ID",
   chains: [sepolia, hardhat],
   transports: {
-    [sepolia.id]: http(),
+    [sepolia.id]: http("https://eth-sepolia.g.alchemy.com/v2/3qRB0TMQQv3hyKgav_6lF"),
     [hardhat.id]: http("http://127.0.0.1:8545"),
   },
 });

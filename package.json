@@ -54,7 +54,7 @@
     "@tanstack/react-query": "^5.91.3",
     "@vercel/analytics": "latest",
     "@web3icons/core": "^4.0.48",
-    "@fhenix-fhe/relayer-sdk": "^0.4.2",
+    "@cofhe/sdk": "^0.5.2",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -89,7 +89,6 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@fhevm/hardhat-plugin": "^0.4.2",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/jest": "^30.0.0",
     "@types/node": "^22",

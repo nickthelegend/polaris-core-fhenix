@@ -5,7 +5,7 @@ import { CONTRACTS, ABIS, NETWORKS } from '@/lib/contracts';
 import { logger } from '@/lib/logger';
 import { parseRevertReason } from '@/lib/revert-mapper';
 import { computeCreditLine, generateBNPLSchedule } from '@/lib/credit-utils';
-import { getFhenixInstance, encrypt64 } from '@/lib/fhevm';
+import { getCoFHEClient, encryptUint64 } from '@/lib/cofhe';
 
 export function usePolaris() {
     const { address, isConnected, chainId: wagmiChainId } = useAccount();
@@ -39,10 +39,17 @@ export function usePolaris() {
     }, [address]);
 
     const encryptAmount = useCallback(
-        async (amount: bigint, contractAddress: string): Promise<{ handle: string; proof: string }> => {
+        async (amount: bigint, contractAddress: string): Promise<{ handle: string; proof: string; encryptedInput: any }> => {
             if (!address) throw new Error('Wallet not connected');
-            const { handles, inputProof } = await encrypt64(contractAddress as `0x${string}`, address as `0x${string}`, amount);
-            return { handle: handles[0], proof: inputProof };
+            const provider = new BrowserProvider((window as any).ethereum);
+            const signer = await provider.getSigner();
+            const client = await getCoFHEClient(signer);
+            const encInput = await encryptUint64(client, amount);
+            return {
+                handle: '0x' + encInput.ctHash.toString(16),
+                proof: encInput.signature,
+                encryptedInput: encInput
+            };
         },
         [address]
     );
@@ -155,10 +162,10 @@ export function usePolaris() {
         try {
             const { config, id } = getMasterConfig();
             const amountWei = parseUnits(amount, 18); // Default to 18 for Hub internal math
-            const { handle, proof } = await encryptAmount(amountWei, config.LOAN_ENGINE);
+            const { encryptedInput } = await encryptAmount(amountWei, config.LOAN_ENGINE);
             const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id);
 
-            const tx = await loanEngine.createLoan(address, handle, proof, tokenAddress, { gasLimit: 2000000 });
+            const tx = await loanEngine.createLoan(address, encryptedInput, tokenAddress, { gasLimit: 2000000 });
             const receipt = await tx.wait();
             setTxHash(receipt.hash);
             return receipt;
@@ -175,10 +182,10 @@ export function usePolaris() {
         try {
             const { config, id } = getMasterConfig();
             const amountWei = parseUnits(amount, 18);
-            const { handle, proof } = await encryptAmount(amountWei, config.LOAN_ENGINE);
+            const { encryptedInput } = await encryptAmount(amountWei, config.LOAN_ENGINE);
             const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id);
 
-            const tx = await loanEngine.repay(loanId, handle, proof);
+            const tx = await loanEngine.repay(loanId, encryptedInput);
             const receipt = await tx.wait();
             setTxHash(receipt.hash);
             return receipt;
@@ -195,10 +202,10 @@ export function usePolaris() {
         try {
             const { config, id } = getMasterConfig();
             const amountWei = parseUnits(amount, 18);
-            const { handle, proof } = await encryptAmount(amountWei, config.POOL_MANAGER);
+            const { encryptedInput } = await encryptAmount(amountWei, config.POOL_MANAGER);
             const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
 
-            const tx = await poolManager.requestWithdrawal(tokenAddress, handle, proof, destChainId);
+            const tx = await poolManager.requestWithdrawal(tokenAddress, encryptedInput, destChainId);
             const receipt = await tx.wait();
             setTxHash(receipt.hash);
             return receipt;
@@ -228,10 +235,10 @@ export function usePolaris() {
         try {
             const { config, id } = getMasterConfig();
             const amountWei = parseUnits(amount, 18);
-            const { handle, proof } = await encryptAmount(amountWei, config.MERCHANT_ROUTER);
+            const { encryptedInput } = await encryptAmount(amountWei, config.MERCHANT_ROUTER);
             const router = await getContract(config.MERCHANT_ROUTER, ABIS.MerchantRouter, id);
 
-            const tx = await router.payWithCredit(merchantAddress, tokenAddress, handle, proof, { gasLimit: 2000000 });
+            const tx = await router.payWithCredit(merchantAddress, tokenAddress, encryptedInput, { gasLimit: 2000000 });
             const receipt = await tx.wait();
             setTxHash(receipt.hash);
             return receipt;

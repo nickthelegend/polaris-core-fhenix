@@ -2,11 +2,10 @@ import { useState, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { usePolaris } from '@/hooks/use-polaris';
 import { CONTRACTS, ABIS, NETWORKS } from '@/lib/contracts';
-import { getFhenixInstance, encrypt64 } from '@/lib/fhevm';
+import { getCoFHEClient, encryptUint64, decryptView, decryptForTransaction } from '@/lib/cofhe';
+import { FheTypes } from '@cofhe/sdk';
 import { logger } from '@/lib/logger';
 import { parseRevertReason } from '@/lib/revert-mapper';
-
-// ─── State shape ────────────────────────────────────────────────────────────
 
 interface FhePrivateLendingState {
   collateralBalance: bigint | null;
@@ -17,8 +16,6 @@ interface FhePrivateLendingState {
   loading: boolean;
   error: string | null;
 }
-
-// ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useFhePrivateLending() {
   const { getContract, address, getMasterConfig } = usePolaris();
@@ -33,18 +30,15 @@ export function useFhePrivateLending() {
     error: null,
   });
 
-  const encryptAmount = useCallback(
-    async (amount: bigint, contractAddress: string): Promise<{ handle: string; proof: string }> => {
-      if (!address) throw new Error('Wallet not connected');
-      const { handles, inputProof } = await encrypt64(contractAddress as `0x${string}`, address as `0x${string}`, amount);
-      return { handle: handles[0], proof: inputProof };
-    },
-    [address]
-  );
+  const getSigner = useCallback(async () => {
+    if (!(window as any).ethereum) throw new Error('Wallet not connected or ethereum provider not found');
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    return provider.getSigner();
+  }, []);
 
   const decryptAllPositions = useCallback(async (tokenAddress: string) => {
     if (!address) return;
-    setState(s => ({ ...s, loading: true }));
+    setState(s => ({ ...s, loading: true, error: null }));
     try {
       const { config, id } = getMasterConfig();
       const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
@@ -59,71 +53,55 @@ export function useFhePrivateLending() {
         scoreManager.getCreditLimit(address)
       ]);
 
-      const fhevm = await getFhenixInstance();
-      const { publicKey, privateKey } = fhevm.generateKeypair();
-      const startTimestamp = Math.floor(Date.now() / 1000);
-      const durationDays = 1;
-      
-      const contractAddresses = [config.POOL_MANAGER, config.LOAN_ENGINE, config.SCORE_MANAGER];
-      const handleContractPairs = [
-        { handle: sHandle, contractAddress: config.POOL_MANAGER },
-        { handle: dHandle, contractAddress: config.LOAN_ENGINE },
-        { handle: cHandle, contractAddress: config.POOL_MANAGER },
-        { handle: scoreHandle, contractAddress: config.SCORE_MANAGER },
-        { handle: limitHandle, contractAddress: config.SCORE_MANAGER }
-      ].filter(p => p.handle && p.handle !== '0x' + '0'.repeat(64));
+      const signer = await getSigner();
+      const client = await getCoFHEClient(signer);
 
-      if (handleContractPairs.length === 0) {
-        setState(s => ({ ...s, suppliedBalance: 0n, debtBalance: 0n, collateralBalance: 0n, creditScore: 300, creditLimit: 0n, loading: false }));
-        return;
-      }
-
-      const eip712 = fhevm.createEIP712(publicKey, contractAddresses, startTimestamp, durationDays);
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      const { EIP712Domain, ...types } = (eip712 as any).types;
-      const signature = await signer.signTypedData((eip712 as any).domain, types, (eip712 as any).message);
-
-      const results = await fhevm.userDecrypt(
-        handleContractPairs,
-        privateKey,
-        publicKey,
-        signature,
-        contractAddresses,
-        address,
-        startTimestamp,
-        durationDays
-      );
-
-      const parse = (h: string) => {
-        const val = results[h as `0x${string}`];
-        return val === undefined ? 0n : BigInt(val);
+      const decryptSingle = async (handle: string, fheType: any) => {
+        if (!handle || handle === '0x' + '0'.repeat(64)) return 0n;
+        try {
+          const val = await decryptView(client, BigInt(handle), fheType);
+          return BigInt(val);
+        } catch (e) {
+          console.error(`Failed to decrypt handle ${handle}:`, e);
+          return 0n;
+        }
       };
+
+      const [supplied, debt, collateral, score, limit] = await Promise.all([
+        decryptSingle(sHandle, FheTypes.Uint64),
+        decryptSingle(dHandle, FheTypes.Uint64),
+        decryptSingle(cHandle, FheTypes.Uint64),
+        decryptSingle(scoreHandle, FheTypes.Uint32),
+        decryptSingle(limitHandle, FheTypes.Uint64)
+      ]);
 
       setState(s => ({
         ...s,
-        suppliedBalance: parse(sHandle),
-        debtBalance: parse(dHandle),
-        collateralBalance: parse(cHandle),
-        creditScore: Number(parse(scoreHandle)),
-        creditLimit: parse(limitHandle),
+        suppliedBalance: supplied,
+        debtBalance: debt,
+        collateralBalance: collateral,
+        creditScore: Number(score),
+        creditLimit: limit,
         loading: false
       }));
-    } catch (err) {
+    } catch (err: any) {
       logger.error('FHE_PRIVATE_LENDING', 'decryptAllPositions failed', { error: err });
-      setState(s => ({ ...s, loading: false }));
+      setState(s => ({ ...s, loading: false, error: err.message }));
       throw err;
     }
-  }, [address, getMasterConfig, getContract]);
+  }, [address, getMasterConfig, getContract, getSigner]);
 
   const supply = useCallback(async (amount: bigint, tokenAddress: string): Promise<string> => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
+      const signer = await getSigner();
+      const client = await getCoFHEClient(signer);
+      const encryptedAmount = await encryptUint64(client, amount);
+
       const { config, id } = getMasterConfig();
-      const { handle, proof } = await encryptAmount(amount, config.POOL_MANAGER);
       const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
       
-      const tx = await poolManager.supply(tokenAddress, handle, proof, Number(amount));
+      const tx = await poolManager.supply(tokenAddress, encryptedAmount, amount);
       const receipt = await tx.wait();
       setState(s => ({ ...s, loading: false }));
       return receipt.hash;
@@ -132,17 +110,19 @@ export function useFhePrivateLending() {
       setState(s => ({ ...s, loading: false, error: msg }));
       throw new Error(msg);
     }
-  }, [encryptAmount, getContract, getMasterConfig]);
+  }, [getContract, getMasterConfig, getSigner]);
 
   const borrow = useCallback(async (amount: bigint, tokenAddress: string): Promise<string> => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
+      const signer = await getSigner();
+      const client = await getCoFHEClient(signer);
+      const encryptedAmount = await encryptUint64(client, amount);
+
       const { config, id } = getMasterConfig();
-      const { handle, proof } = await encryptAmount(amount, config.LOAN_ENGINE);
       const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id);
       
-      // createLoan(address user, euint64 amount, address poolToken)
-      const tx = await loanEngine.createLoan(address, handle, proof, tokenAddress);
+      const tx = await loanEngine.createLoan(address, encryptedAmount, tokenAddress);
       const receipt = await tx.wait();
       setState(s => ({ ...s, loading: false }));
       return receipt.hash;
@@ -151,17 +131,19 @@ export function useFhePrivateLending() {
       setState(s => ({ ...s, loading: false, error: msg }));
       throw new Error(msg);
     }
-  }, [encryptAmount, getContract, getMasterConfig, address]);
+  }, [getContract, getMasterConfig, address, getSigner]);
 
   const repay = useCallback(async (loanId: number, amount: bigint): Promise<string> => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
+      const signer = await getSigner();
+      const client = await getCoFHEClient(signer);
+      const encryptedAmount = await encryptUint64(client, amount);
+
       const { config, id } = getMasterConfig();
-      const { handle, proof } = await encryptAmount(amount, config.LOAN_ENGINE);
       const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id);
       
-      // repay(uint256 loanId, euint64 amount, bytes calldata inputProof)
-      const tx = await loanEngine.repay(loanId, handle, proof);
+      const tx = await loanEngine.repay(loanId, encryptedAmount);
       const receipt = await tx.wait();
       setState(s => ({ ...s, loading: false }));
       return receipt.hash;
@@ -170,17 +152,61 @@ export function useFhePrivateLending() {
       setState(s => ({ ...s, loading: false, error: msg }));
       throw new Error(msg);
     }
-  }, [encryptAmount, getContract, getMasterConfig]);
+  }, [getContract, getMasterConfig, getSigner]);
+
+  /** Repay a loan — triggers on-chain audit reveal flow */
+  const repayLoan = useCallback(async (loanId: number) => {
+    setState(s => ({ ...s, loading: true, error: null }));
+    try {
+      const signer = await getSigner();
+      const client = await getCoFHEClient(signer);
+
+      const { config, id } = getMasterConfig();
+      const loanEngine = await getContract(config.LOAN_ENGINE, ABIS.LoanEngine, id);
+
+      // Step 1: Trigger audit → marks handle publicly decryptable on-chain
+      const auditTx = await loanEngine.auditRepayment(loanId);
+      const receipt = await auditTx.wait();
+
+      // Step 2: Parse handle from event
+      const auditEvent = receipt.logs.find((l: any) =>
+        l.topics[0] === ethers.id("RepaymentAuditRequested(uint256,bytes32)")
+      );
+      if (!auditEvent) {
+        throw new Error("RepaymentAuditRequested event not found in transaction receipt");
+      }
+      const handle = BigInt(auditEvent.topics[2]);
+
+      // Step 3: Obtain MPC threshold signature (off-chain via Fhenix network)
+      const { decryptedValue, signature } = await decryptForTransaction(client, handle);
+
+      // Step 4: Finalize on-chain with the cleartext + MPC proof
+      const finalizeTx = await loanEngine.finalizeRepaymentAudit(
+        loanId,
+        decryptedValue,  // boolean: isFullyRepaid
+        signature
+      );
+      const finalizeReceipt = await finalizeTx.wait();
+      setState(s => ({ ...s, loading: false }));
+      return finalizeReceipt.hash;
+    } catch (e: any) {
+      const msg = parseRevertReason(e);
+      setState(s => ({ ...s, loading: false, error: msg }));
+      throw new Error(msg);
+    }
+  }, [getContract, getMasterConfig, getSigner]);
 
   const requestWithdrawal = useCallback(async (tokenAddress: string, amount: bigint, destChainId: number): Promise<string> => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
+      const signer = await getSigner();
+      const client = await getCoFHEClient(signer);
+      const encryptedAmount = await encryptUint64(client, amount);
+
       const { config, id } = getMasterConfig();
-      const { handle, proof } = await encryptAmount(amount, config.POOL_MANAGER);
       const poolManager = await getContract(config.POOL_MANAGER, ABIS.PoolManager, id);
       
-      // requestWithdrawal(address tokenOnSource, externalEuint64 encryptedAmount, bytes calldata inputProof, uint64 destChainId)
-      const tx = await poolManager.requestWithdrawal(tokenAddress, handle, proof, destChainId);
+      const tx = await poolManager.requestWithdrawal(tokenAddress, encryptedAmount, destChainId);
       const receipt = await tx.wait();
       setState(s => ({ ...s, loading: false }));
       return receipt.hash;
@@ -189,7 +215,7 @@ export function useFhePrivateLending() {
       setState(s => ({ ...s, loading: false, error: msg }));
       throw new Error(msg);
     }
-  }, [encryptAmount, getContract, getMasterConfig]);
+  }, [getContract, getMasterConfig, getSigner]);
 
   const finalizeWithdrawal = useCallback(async (nonce: number, clearResult: string, proof: string): Promise<string> => {
     setState(s => ({ ...s, loading: true, error: null }));
@@ -214,8 +240,8 @@ export function useFhePrivateLending() {
     supply,
     borrow,
     repay,
+    repayLoan,
     requestWithdrawal,
-    finalizeWithdrawal,
-    encryptAmount
+    finalizeWithdrawal
   };
 }
