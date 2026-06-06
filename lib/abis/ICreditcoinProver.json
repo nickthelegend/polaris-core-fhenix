@@ -1,0 +1,104 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "queryId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "getQueryDetails",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint8",
+                        "name": "state",
+                        "type": "uint8"
+                    },
+                    {
+                        "components": [
+                            {
+                                "internalType": "uint64",
+                                "name": "chainId",
+                                "type": "uint64"
+                            },
+                            {
+                                "internalType": "uint64",
+                                "name": "height",
+                                "type": "uint64"
+                            },
+                            {
+                                "internalType": "uint64",
+                                "name": "index",
+                                "type": "uint64"
+                            },
+                            {
+                                "components": [
+                                    {
+                                        "internalType": "uint64",
+                                        "name": "offset",
+                                        "type": "uint64"
+                                    },
+                                    {
+                                        "internalType": "uint64",
+                                        "name": "size",
+                                        "type": "uint64"
+                                    }
+                                ],
+                                "internalType": "struct LayoutSegment[]",
+                                "name": "layoutSegments",
+                                "type": "tuple[]"
+                            }
+                        ],
+                        "internalType": "struct ChainQuery",
+                        "name": "query",
+                        "type": "tuple"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "escrowedAmount",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "principal",
+                        "type": "address"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "estimatedCost",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    },
+                    {
+                        "components": [
+                            {
+                                "internalType": "uint256",
+                                "name": "offset",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "bytes32",
+                                "name": "abiBytes",
+                                "type": "bytes32"
+                            }
+                        ],
+                        "internalType": "struct ResultSegment[]",
+                        "name": "resultSegments",
+                        "type": "tuple[]"
+                    }
+                ],
+                "internalType": "struct QueryDetails",
+                "name": "queryDetails",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
